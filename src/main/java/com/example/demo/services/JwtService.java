@@ -70,10 +70,16 @@ public class JwtService extends OncePerRequestFilter {
                             UserApp userApp = optUserApp.get();
 
                             if (validateToken(token, userApp)) {
-                                UsernamePasswordAuthenticationToken usernamePasswordAuthenticationToken = new UsernamePasswordAuthenticationToken(
-                                        userApp, null, null);
+                                String role = claims.get("role", String.class); // récupère depuis le JWT
+                                SimpleGrantedAuthority authority = new SimpleGrantedAuthority("ROLE_" + role);
+
+                                UsernamePasswordAuthenticationToken usernamePasswordAuthenticationToken =
+                                        new UsernamePasswordAuthenticationToken(
+                                                userApp, null, Collections.singletonList(authority));
+
                                 SecurityContextHolder.getContext().setAuthentication(usernamePasswordAuthenticationToken);
                             }
+
                         } catch (Exception e) {
                             // Remove the cookie
                             Cookie expiredCookie = new Cookie(COOKIE_NAME, null);
@@ -101,6 +107,7 @@ public class JwtService extends OncePerRequestFilter {
     public static String generateToken(UserApp userApp) {
         Map<String, Object> claims = new HashMap<>();
         claims.put("username", userApp.getUsername());
+        claims.put("role", userApp.getRole());
         return Jwts.builder().setClaims(claims).setSubject(userApp.getUsername()).setIssuedAt(new Date(System.currentTimeMillis()))
                 .setExpiration(new Date(System.currentTimeMillis() + JWT_TOKEN_VALIDITY))
                 .signWith(SignatureAlgorithm.HS256, SECRET).compact();
