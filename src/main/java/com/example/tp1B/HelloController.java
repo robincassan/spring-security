@@ -1,7 +1,7 @@
 package com.example.tp1B;
 
+import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.GetMapping;
-import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RestController;
 
 @RestController
@@ -18,6 +18,14 @@ public class HelloController {
     public String helloPrivate() {
         return "hello private";
     }
+
+    @GetMapping("/hello/me")
+    public String me(Authentication authentication) {
+        return "Utilisateur connecté : " + authentication.getName() +
+                " | Roles : " + authentication.getAuthorities();
+    }
+
+
 
 }
 
