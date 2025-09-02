@@ -1,5 +1,6 @@
-package com.example.tp1c;
+package com.example.tp1c.repository;
 
+import com.example.tp1c.UserApp;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.stereotype.Repository;
 

@@ -1,0 +1,30 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org">
+<head>
+  <title>Liste des articles</title>
+</head>
+<body>
+<h2>Liste des articles</h2>
+
+<table border="1">
+  <thead>
+  <tr>
+    <th>ID</th>
+    <th>Titre</th>
+    <th>Contenu</th>
+    <th>Auteur</th>
+  </tr>
+  </thead>
+  <tbody>
+  <tr th:each="article : ${articles}">
+    <td th:text="${article.id}"></td>
+    <td th:text="${article.titre}"></td>
+    <td th:text="${article.contenu}"></td>
+    <td th:text="${article.auteur != null ? article.auteur.email : 'Inconnu'}"></td>
+  </tr>
+  </tbody>
+</table>
+
+<a href="/add-article">Ajouter un nouvel article</a>
+</body>
+</html>
