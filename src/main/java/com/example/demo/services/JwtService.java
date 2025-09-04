@@ -3,7 +3,6 @@ package com.example.demo.services;
 import com.example.demo.models.UserApp;
 import com.example.demo.repositories.UserAppRepository;
 import io.jsonwebtoken.Claims;
-import io.jsonwebtoken.ExpiredJwtException;
 import io.jsonwebtoken.Jwts;
 import io.jsonwebtoken.SignatureAlgorithm;
 import jakarta.servlet.FilterChain;
@@ -18,7 +17,6 @@ import org.springframework.security.authentication.DisabledException;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.authority.SimpleGrantedAuthority;
 import org.springframework.security.core.context.SecurityContextHolder;
-import org.springframework.security.core.userdetails.UserDetails;
 import org.springframework.security.core.userdetails.UsernameNotFoundException;
 import org.springframework.security.web.authentication.WebAuthenticationDetailsSource;
 import org.springframework.stereotype.Service;
@@ -30,18 +28,22 @@ import java.util.stream.Stream;
 
 @Service
 public class JwtService extends OncePerRequestFilter {
+
     @Value("${jwt.secret}")
     private static String SECRET;
+
     @Value("${jwt.secret}")
     public void setSecret(String secret) {
         SECRET = secret;
     }
 
-    private static String COOKIE_NAME= "";
+    private static String COOKIE_NAME = "";
+
     @Value("${jwt.cookie_name}")
     public void setCookieName(String cookie_name) {
         COOKIE_NAME = cookie_name;
     }
+
     public static final long JWT_TOKEN_VALIDITY = 5 * 60 * 60 * 1000;
 
     @Autowired
@@ -55,37 +57,37 @@ public class JwtService extends OncePerRequestFilter {
 
         if (request.getCookies() != null) {
             Stream.of(request.getCookies())
-                    .filter(cookie ->
-                            cookie.getName().equals(COOKIE_NAME))
-                                .map(Cookie::getValue)
+                    .filter(cookie -> cookie.getName().equals(COOKIE_NAME))
+                    .map(Cookie::getValue)
                     .forEach(token -> {
                         try {
-
                             Claims claims = Jwts.parser().setSigningKey(SECRET).parseClaimsJws(token).getBody();
 
                             Optional<UserApp> optUserApp = userAppRepository.findByUsername(claims.getSubject());
-                            if(optUserApp.isEmpty()){
+                            if (optUserApp.isEmpty()) {
                                 throw new UsernameNotFoundException(claims.getSubject());
                             }
                             UserApp userApp = optUserApp.get();
 
                             if (validateToken(token, userApp)) {
-                                String role = claims.get("role", String.class); // récupère depuis le JWT
+                                String role = claims.get("role", String.class);
                                 SimpleGrantedAuthority authority = new SimpleGrantedAuthority("ROLE_" + role);
 
-                                UsernamePasswordAuthenticationToken usernamePasswordAuthenticationToken =
-                                        new UsernamePasswordAuthenticationToken(
-                                                userApp, null, Collections.singletonList(authority));
+                                UsernamePasswordAuthenticationToken authToken =
+                                        new UsernamePasswordAuthenticationToken(userApp, null, Collections.singletonList(authority));
 
-                                SecurityContextHolder.getContext().setAuthentication(usernamePasswordAuthenticationToken);
+                                // Initialisation des détails
+                                authToken.setDetails(new WebAuthenticationDetailsSource().buildDetails(request));
+
+                                SecurityContextHolder.getContext().setAuthentication(authToken);
                             }
 
                         } catch (Exception e) {
-                            // Remove the cookie
+                            // Supprime le cookie si token invalide
                             Cookie expiredCookie = new Cookie(COOKIE_NAME, null);
                             expiredCookie.setPath("/");
                             expiredCookie.setHttpOnly(true);
-                            expiredCookie.setMaxAge(0); // Set the cookie's max age to 0 to delete it
+                            expiredCookie.setMaxAge(0);
                             response.addCookie(expiredCookie);
                         }
                     });
@@ -96,31 +98,39 @@ public class JwtService extends OncePerRequestFilter {
 
     public static Boolean validateToken(String token, UserApp userApp) {
         try {
-            Jwts.parser().setSigningKey(SECRET).parseClaimsJws(token).getBody();
-        }catch (Exception e){
+            Claims claims = Jwts.parser().setSigningKey(SECRET).parseClaimsJws(token).getBody();
+            return claims.getSubject().equals(userApp.getUsername()) && !isTokenExpired(claims);
+        } catch (Exception e) {
             return false;
         }
-        return true;
+    }
 
+    private static boolean isTokenExpired(Claims claims) {
+        return claims.getExpiration().before(new Date());
     }
 
     public static String generateToken(UserApp userApp) {
         Map<String, Object> claims = new HashMap<>();
         claims.put("username", userApp.getUsername());
         claims.put("role", userApp.getRole());
-        return Jwts.builder().setClaims(claims).setSubject(userApp.getUsername()).setIssuedAt(new Date(System.currentTimeMillis()))
+        return Jwts.builder()
+                .setClaims(claims)
+                .setSubject(userApp.getUsername())
+                .setIssuedAt(new Date(System.currentTimeMillis()))
                 .setExpiration(new Date(System.currentTimeMillis() + JWT_TOKEN_VALIDITY))
-                .signWith(SignatureAlgorithm.HS256, SECRET).compact();
+                .signWith(SignatureAlgorithm.HS256, SECRET)
+                .compact();
     }
 
-    public ResponseCookie createAuthenticationToken(UserApp userApp ) throws Exception {
+    public ResponseCookie createAuthenticationToken(UserApp userApp) throws Exception {
         try {
             final String token = generateToken(userApp);
-            return ResponseCookie.from(COOKIE_NAME, token).httpOnly(true)
-                    .path("/").build();
-        }catch(DisabledException e) {
+            return ResponseCookie.from(COOKIE_NAME, token)
+                    .httpOnly(true)
+                    .path("/")
+                    .build();
+        } catch (DisabledException e) {
             throw new Exception();
         }
-
     }
 }
