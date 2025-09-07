@@ -5,11 +5,13 @@ import com.example.demo.models.UserApp;
 import com.example.demo.repositories.JobOfferRepository;
 import com.example.demo.repositories.UserAppRepository;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.*;
 
-import java.security.Principal;
 import java.util.List;
+import java.util.NoSuchElementException;
 
 @RestController
 @RequestMapping("/jobs")
@@ -29,24 +31,25 @@ public class JobOfferController {
 
     // 2. Accessible aux connectés : ajouter une offre
     @PostMapping
-    public ResponseEntity<?> createJob(@RequestBody JobOffer job, Principal principal) {
-        UserApp user = userAppRepository.findByUsername(principal.getName()).orElseThrow();
+    public ResponseEntity<?> createJob(@RequestBody JobOffer job, @AuthenticationPrincipal UserApp user) {
         job.setCreator(user);
         return ResponseEntity.ok(jobOfferRepository.save(job));
     }
 
     // 3. Supprimer une offre
     @DeleteMapping("/{id}")
-    public ResponseEntity<?> deleteJob(@PathVariable Long id, Principal principal) {
-        JobOffer job = jobOfferRepository.findById(id).orElseThrow();
-        UserApp currentUser = userAppRepository.findByUsername(principal.getName()).orElseThrow();
-
-        if (job.getCreator().getUsername().equals(currentUser.getUsername())
-                || currentUser.getRole().equals("ADMIN")) {
-            jobOfferRepository.delete(job);
-            return ResponseEntity.ok("Job deleted");
+    public ResponseEntity<?> deleteJob(@PathVariable Long id, @AuthenticationPrincipal UserApp currentUser) {
+        try {
+            JobOffer job = jobOfferRepository.findById(id)
+                    .orElseThrow(() -> new NoSuchElementException("Job offer with ID " + id + " not found"));
+            if (job.getCreator().getUsername().equals(currentUser.getUsername())
+                    || currentUser.getRole().equals("ADMIN")) {
+                jobOfferRepository.delete(job);
+                return ResponseEntity.ok("Job deleted");
+            }
+            return ResponseEntity.status(HttpStatus.FORBIDDEN).body("Forbidden: You do not have permission to delete this job");
+        } catch (NoSuchElementException e) {
+            return ResponseEntity.status(HttpStatus.NOT_FOUND).body(e.getMessage());
         }
-        return ResponseEntity.status(403).body("Forbidden");
     }
 }
-
